@@ -5,8 +5,8 @@ struct process {
     int pid;
     int at;   // Arrival Time
     int bt;   // Burst Time
-    int rt;   // Remaining Time (for SRTF & RR)
-    int pr;   // Priority (for Priority Scheduling)
+    int rt;   // Remaining Time (used in RR)
+    int pr;   // Priority
     int ct;   // Completion Time
     int wt;   // Waiting Time
     int tat;  // Turnaround Time
@@ -30,60 +30,67 @@ void fcfs(int n, struct process p[]) {
     for (int i = 0; i < n; i++) {
         if (current_time < p[i].at)
             current_time = p[i].at;
+
         p[i].ct = current_time + p[i].bt;
         p[i].tat = p[i].ct - p[i].at;
         p[i].wt = p[i].tat - p[i].bt;
+
         current_time = p[i].ct;
         total_wt += p[i].wt;
     }
 
-    printf("\nFCFS Scheduling:\nPID\tAT\tBT\tCT\tTAT\tWT\n");
+    printf("\nFCFS Scheduling:\n");
+    printf("PID\tAT\tBT\tCT\tTAT\tWT\n");
+
     for (int i = 0; i < n; i++) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\n",
-               p[i].pid, p[i].at, p[i].bt, p[i].ct, p[i].tat, p[i].wt);
+               p[i].pid, p[i].at, p[i].bt,
+               p[i].ct, p[i].tat, p[i].wt);
     }
+
     printf("Average Waiting Time = %.2f\n", total_wt / n);
 }
 
-void srtf(int n, struct process p[]) {
-    int t = 0, completed = 0, min_index;
+void sjf(int n, struct process p[]) {
+    int current_time = 0, completed = 0, selected;
     float total_wt = 0.0;
-
-    for (int i = 0; i < n; i++)
-        p[i].rt = p[i].bt;
+    int visited[10] = {0};
 
     while (completed < n) {
-        int min_rt = INT_MAX;
-        min_index = -1;
+        int min_bt = INT_MAX;
+        selected = -1;
+
         for (int i = 0; i < n; i++) {
-            if (p[i].at <= t && p[i].rt > 0 && p[i].rt < min_rt) {
-                min_rt = p[i].rt;
-                min_index = i;
+            if (!visited[i] && p[i].at <= current_time && p[i].bt < min_bt) {
+                min_bt = p[i].bt;
+                selected = i;
             }
         }
 
-        if (min_index == -1) {
-            t++;
+        if (selected == -1) {
+            current_time++;
             continue;
         }
 
-        p[min_index].rt--;
-        t++;
+        p[selected].ct = current_time + p[selected].bt;
+        p[selected].tat = p[selected].ct - p[selected].at;
+        p[selected].wt = p[selected].tat - p[selected].bt;
 
-        if (p[min_index].rt == 0) {
-            p[min_index].ct = t;
-            p[min_index].tat = p[min_index].ct - p[min_index].at;
-            p[min_index].wt = p[min_index].tat - p[min_index].bt;
-            total_wt += p[min_index].wt;
-            completed++;
-        }
+        total_wt += p[selected].wt;
+        current_time = p[selected].ct;
+        visited[selected] = 1;
+        completed++;
     }
 
-    printf("\nSRTF Scheduling:\nPID\tAT\tBT\tCT\tTAT\tWT\n");
+    printf("\nSJF Scheduling (Non-Preemptive):\n");
+    printf("PID\tAT\tBT\tCT\tTAT\tWT\n");
+
     for (int i = 0; i < n; i++) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\n",
-               p[i].pid, p[i].at, p[i].bt, p[i].ct, p[i].tat, p[i].wt);
+               p[i].pid, p[i].at, p[i].bt,
+               p[i].ct, p[i].tat, p[i].wt);
     }
+
     printf("Average Waiting Time = %.2f\n", total_wt / n);
 }
 
@@ -95,6 +102,7 @@ void priority_non_preemptive(int n, struct process p[]) {
     while (completed < n) {
         int max_pr = -1;
         selected = -1;
+
         for (int i = 0; i < n; i++) {
             if (!visited[i] && p[i].at <= current_time && p[i].pr > max_pr) {
                 max_pr = p[i].pr;
@@ -110,19 +118,22 @@ void priority_non_preemptive(int n, struct process p[]) {
         p[selected].ct = current_time + p[selected].bt;
         p[selected].tat = p[selected].ct - p[selected].at;
         p[selected].wt = p[selected].tat - p[selected].bt;
-        total_wt += p[selected].wt;
 
+        total_wt += p[selected].wt;
         current_time = p[selected].ct;
         visited[selected] = 1;
         completed++;
     }
 
-    printf("\nNon-Preemptive Priority Scheduling:\nPID\tAT\tBT\tPR\tCT\tTAT\tWT\n");
+    printf("\nNon-Preemptive Priority Scheduling:\n");
+    printf("PID\tAT\tBT\tPR\tCT\tTAT\tWT\n");
+
     for (int i = 0; i < n; i++) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
                p[i].pid, p[i].at, p[i].bt, p[i].pr,
                p[i].ct, p[i].tat, p[i].wt);
     }
+
     printf("Average Waiting Time = %.2f\n", total_wt / n);
 }
 
@@ -135,31 +146,41 @@ void round_robin(int n, struct process p[], int quantum) {
 
     while (completed < n) {
         int idle = 1;
+
         for (int i = 0; i < n; i++) {
             if (p[i].at <= t && p[i].rt > 0) {
                 idle = 0;
+
                 if (p[i].rt > quantum) {
                     p[i].rt -= quantum;
                     t += quantum;
                 } else {
                     t += p[i].rt;
                     p[i].rt = 0;
+
                     p[i].ct = t;
                     p[i].tat = p[i].ct - p[i].at;
                     p[i].wt = p[i].tat - p[i].bt;
+
                     total_wt += p[i].wt;
                     completed++;
                 }
             }
         }
-        if (idle) t++;
+
+        if (idle)
+            t++;
     }
 
-    printf("\nRound Robin Scheduling (Quantum = %d):\nPID\tAT\tBT\tCT\tTAT\tWT\n", quantum);
+    printf("\nRound Robin Scheduling (Quantum = %d):\n", quantum);
+    printf("PID\tAT\tBT\tCT\tTAT\tWT\n");
+
     for (int i = 0; i < n; i++) {
         printf("%d\t%d\t%d\t%d\t%d\t%d\n",
-               p[i].pid, p[i].at, p[i].bt, p[i].ct, p[i].tat, p[i].wt);
+               p[i].pid, p[i].at, p[i].bt,
+               p[i].ct, p[i].tat, p[i].wt);
     }
+
     printf("Average Waiting Time = %.2f\n", total_wt / n);
 }
 
@@ -172,28 +193,29 @@ int main() {
 
     for (int i = 0; i < n; i++) {
         p[i].pid = i + 1;
+
         printf("Enter arrival time of P%d: ", p[i].pid);
         scanf("%d", &p[i].at);
+
         printf("Enter burst time of P%d: ", p[i].pid);
         scanf("%d", &p[i].bt);
+
         printf("Enter priority of P%d: ", p[i].pid);
         scanf("%d", &p[i].pr);
     }
 
-    // Copy original array for each algorithm
-    for (int i = 0; i < n; i++) p_copy[i] = p[i];
-
     while (1) {
         printf("\n--- Scheduling Menu ---\n");
-        printf("1. FCFS\n2. SRTF\n3. Non-Preemptive Priority\n4. Round Robin\n5. Exit\n");
+        printf("1. FCFS\n2. SJF\n3. Non-Preemptive Priority\n4. Round Robin\n5. Exit\n");
         printf("Enter your choice: ");
         scanf("%d", &choice);
 
-        for (int i = 0; i < n; i++) p_copy[i] = p[i]; // reset data before each run
+        for (int i = 0; i < n; i++)
+            p_copy[i] = p[i];
 
-        switch(choice) {
+        switch (choice) {
             case 1: fcfs(n, p_copy); break;
-            case 2: srtf(n, p_copy); break;
+            case 2: sjf(n, p_copy); break;
             case 3: priority_non_preemptive(n, p_copy); break;
             case 4: round_robin(n, p_copy, quantum); break;
             case 5: return 0;
@@ -201,4 +223,3 @@ int main() {
         }
     }
 }
-
